@@ -11,10 +11,13 @@
  * @author Matthias Carchon webmaster@c-mattic.be
  * @author Marijn Hofstra <hofstra.m@gmail.com>
  * @author Timon Van Overveldt <timonvo@gmail.com>
+ * @author Jeroen
+ * @author Ricardo Guijt <ricardoguijt@gmail.com>
+ * @author Gerrit <klapinklapin@gmail.com>
  */
 $lang['menu']                  = 'Gebruikersmanager';
 $lang['noauth']                = '(gebruikersauthenticatie niet beschikbaar)';
-$lang['nosupport']             = '(gebruikersmanagement niet ondersteund)';
+$lang['nosupport']             = '(gebruikersbeheer niet ondersteund)';
 $lang['badauth']               = 'ongeldige authenticatiemethode';
 $lang['user_id']               = 'Gebruiker';
 $lang['user_pass']             = 'Wachtwoord';

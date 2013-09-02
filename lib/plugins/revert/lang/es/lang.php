@@ -18,6 +18,10 @@
  * @author Victor Castelan <victorcastelan@gmail.com>
  * @author Mauro Javier Giamberardino <mgiamberardino@gmail.com>
  * @author emezeta <emezeta@infoprimo.com>
+ * @author Oscar Ciudad <oscar@jacho.net>
+ * @author Ruben Figols <ruben.figols@gmail.com>
+ * @author Gerardo Zamudio <gerardo@gerardozamudio.net>
+ * @author Mercè López mercelz@gmail.com
  */
 $lang['menu']                  = 'Restaurador';
 $lang['filter']                = 'Buscar páginas con spam';

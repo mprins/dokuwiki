@@ -14,6 +14,8 @@
  * @author Luis Dantas <luisdantas@gmail.com>
  * @author Sergio Motta sergio@cisne.com.br
  * @author Isaias Masiero Filho <masiero@masiero.org>
+ * @author Balaco Baco <balacobaco@imap.cc>
+ * @author Victor Westmann <victor.westmann@gmail.com>
  */
 $lang['name']                  = 'Retorno de popularidade (pode demorar um pouco para carregar)';
 $lang['submit']                = 'Enviar dados';

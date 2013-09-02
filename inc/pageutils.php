@@ -19,9 +19,11 @@
  * @author Andreas Gohr <andi@splitbrain.org>
  */
 function getID($param='id',$clean=true){
+    global $INPUT;
     global $conf;
+    global $ACT;
 
-    $id = isset($_REQUEST[$param]) ? $_REQUEST[$param] : null;
+    $id = $INPUT->str($param);
 
     //construct page id from request URI
     if(empty($id) && $conf['userewrite'] == 2){
@@ -34,7 +36,7 @@ function getID($param='id',$clean=true){
             if($param != 'id') {
                 $relpath = 'lib/exe/';
             }
-            $script = $conf['basedir'].$relpath.basename($_SERVER['SCRIPT_FILENAME']);
+            $script = $conf['basedir'].$relpath.utf8_basename($_SERVER['SCRIPT_FILENAME']);
 
         }elseif($_SERVER['PATH_INFO']){
             $request = $_SERVER['PATH_INFO'];
@@ -74,7 +76,7 @@ function getID($param='id',$clean=true){
             // fall back to default
             $id = $id.$conf['start'];
         }
-        send_redirect(wl($id,'',true));
+        if (isset($ACT) && $ACT === 'show') send_redirect(wl($id,'',true));
     }
 
     if($clean) $id = cleanID($id);
@@ -92,7 +94,7 @@ function getID($param='id',$clean=true){
  * @author Andreas Gohr <andi@splitbrain.org>
  * @param  string  $raw_id    The pageid to clean
  * @param  boolean $ascii     Force ASCII
- * @param  boolean $media     Allow leading or trailing _ for media files
+ * @param  boolean $media     DEPRECATED
  */
 function cleanID($raw_id,$ascii=false,$media=false){
     global $conf;
@@ -114,11 +116,10 @@ function cleanID($raw_id,$ascii=false,$media=false){
     $id = utf8_strtolower($id);
 
     //alternative namespace seperator
-    $id = strtr($id,';',':');
     if($conf['useslash']){
-        $id = strtr($id,'/',':');
+        $id = strtr($id,';/','::');
     }else{
-        $id = strtr($id,'/',$sepchar);
+        $id = strtr($id,';/',':'.$sepchar);
     }
 
     if($conf['deaccent'] == 2 || $ascii) $id = utf8_romanize($id);
@@ -132,8 +133,9 @@ function cleanID($raw_id,$ascii=false,$media=false){
     //clean up
     $id = preg_replace($sepcharpat,$sepchar,$id);
     $id = preg_replace('#:+#',':',$id);
-    $id = ($media ? trim($id,':.-') : trim($id,':._-'));
+    $id = trim($id,':._-');
     $id = preg_replace('#:[:\._\-]+#',':',$id);
+    $id = preg_replace('#[:\._\-]+:#',':',$id);
 
     $cache[(string)$raw_id] = $id;
     return($id);
@@ -197,7 +199,8 @@ function noNSorNS($id) {
  * Creates a XHTML valid linkid from a given headline title
  *
  * @param string  $title   The headline title
- * @param array   $check   Existing IDs (title => number)
+ * @param array|bool   $check   Existing IDs (title => number)
+ * @return string the title
  * @author Andreas Gohr <andi@splitbrain.org>
  */
 function sectionID($title,&$check) {
@@ -212,9 +215,9 @@ function sectionID($title,&$check) {
     if(is_array($check)){
         // make sure tiles are unique
         if (!array_key_exists ($title,$check)) {
-           $check[$title] = 0;
+            $check[$title] = 0;
         } else {
-           $title .= ++ $check[$title];
+            $title .= ++ $check[$title];
         }
     }
 
@@ -295,8 +298,6 @@ function wikiLockFN($id) {
 /**
  * returns the full path to the meta file specified by ID and extension
  *
- * The filename is URL encoded to protect Unicode chars
- *
  * @author Steven Danz <steven-danz@kc.rr.com>
  */
 function metaFN($id,$ext){
@@ -304,6 +305,19 @@ function metaFN($id,$ext){
     $id = cleanID($id);
     $id = str_replace(':','/',$id);
     $fn = $conf['metadir'].'/'.utf8_encodeFN($id).$ext;
+    return $fn;
+}
+
+/**
+ * returns the full path to the media's meta file specified by ID and extension
+ *
+ * @author Kate Arzamastseva <pshns@ukr.net>
+ */
+function mediaMetaFN($id,$ext){
+    global $conf;
+    $id = cleanID($id);
+    $id = str_replace(':','/',$id);
+    $fn = $conf['mediametadir'].'/'.utf8_encodeFN($id).$ext;
     return $fn;
 }
 
@@ -326,29 +340,38 @@ function metaFiles($id){
  * The filename is URL encoded to protect Unicode chars
  *
  * @author Andreas Gohr <andi@splitbrain.org>
+ * @author Kate Arzamastseva <pshns@ukr.net>
  */
-function mediaFN($id){
+function mediaFN($id, $rev=''){
     global $conf;
     $id = cleanID($id);
     $id = str_replace(':','/',$id);
-    $fn = $conf['mediadir'].'/'.utf8_encodeFN($id);
+    if(empty($rev)){
+        $fn = $conf['mediadir'].'/'.utf8_encodeFN($id);
+    }else{
+        $ext = mimetype($id);
+        $name = substr($id,0, -1*strlen($ext[0])-1);
+        $fn = $conf['mediaolddir'].'/'.utf8_encodeFN($name .'.'.( (int) $rev ).'.'.$ext[0]);
+    }
     return $fn;
 }
 
 /**
- * Returns the full filepath to a localized textfile if local
+ * Returns the full filepath to a localized file if local
  * version isn't found the english one is returned
  *
+ * @param  string $id  The id of the local file
+ * @param  string $ext The file extension (usually txt)
  * @author Andreas Gohr <andi@splitbrain.org>
  */
-function localeFN($id){
+function localeFN($id,$ext='txt'){
     global $conf;
-    $file = DOKU_CONF.'/lang/'.$conf['lang'].'/'.$id.'.txt';
+    $file = DOKU_CONF.'/lang/'.$conf['lang'].'/'.$id.'.'.$ext;
     if(!@file_exists($file)){
-        $file = DOKU_INC.'inc/lang/'.$conf['lang'].'/'.$id.'.txt';
+        $file = DOKU_INC.'inc/lang/'.$conf['lang'].'/'.$id.'.'.$ext;
         if(!@file_exists($file)){
             //fall back to english
-            $file = DOKU_INC.'inc/lang/en/'.$id.'.txt';
+            $file = DOKU_INC.'inc/lang/en/'.$id.'.'.$ext;
         }
     }
     return $file;
@@ -513,15 +536,25 @@ function getCacheName($data,$ext=''){
  * @author Andreas Gohr <gohr@cosmocode.de>
  */
 function isHiddenPage($id){
+    $data = array(
+        'id' => $id,
+        'hidden' => false
+    );
+    trigger_event('PAGEUTILS_ID_HIDEPAGE', $data, '_isHiddenPage');
+    return $data['hidden'];
+}
+
+function _isHiddenPage(&$data) {
     global $conf;
     global $ACT;
-    if(empty($conf['hidepages'])) return false;
-    if($ACT == 'admin') return false;
 
-    if(preg_match('/'.$conf['hidepages'].'/ui',':'.$id)){
-        return true;
+    if ($data['hidden']) return;
+    if(empty($conf['hidepages'])) return;
+    if($ACT == 'admin') return;
+
+    if(preg_match('/'.$conf['hidepages'].'/ui',':'.$data['id'])){
+        $data['hidden'] = true;
     }
-    return false;
 }
 
 /**
@@ -601,3 +634,28 @@ function utf8_decodeFN($file){
     return urldecode($file);
 }
 
+/**
+ * Find a page in the current namespace (determined from $ID) or any
+ * higher namespace
+ *
+ * Used for sidebars, but can be used other stuff as well
+ *
+ * @todo   add event hook
+ * @param  string $page the pagename you're looking for
+ * @return string|false the full page id of the found page, false if any
+ */
+function page_findnearest($page){
+    if (!$page) return false;
+    global $ID;
+
+    $ns = $ID;
+    do {
+        $ns = getNS($ns);
+        $pageid = ltrim("$ns:$page",':');
+        if(page_exists($pageid)){
+            return $pageid;
+        }
+    } while($ns);
+
+    return false;
+}

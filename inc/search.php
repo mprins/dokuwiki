@@ -16,14 +16,16 @@ if(!defined('DOKU_INC')) die('meh.');
  *
  * @param   array ref $data The results of the search are stored here
  * @param   string    $base Where to start the search
- * @param   callback  $func Callback (function name or arayy with object,method)
+ * @param   callback  $func Callback (function name or array with object,method)
  * @param   string    $dir  Current directory beyond $base
  * @param   int       $lvl  Recursion Level
+ * @param   mixed     $sort 'natural' to use natural order sorting (default); 'date' to sort by filemtime; leave empty to skip sorting.
  * @author  Andreas Gohr <andi@splitbrain.org>
  */
-function search(&$data,$base,$func,$opts,$dir='',$lvl=1){
+function search(&$data,$base,$func,$opts,$dir='',$lvl=1,$sort='natural'){
     $dirs   = array();
     $files  = array();
+    $filepaths = array();
 
     //read in directories and files
     $dh = @opendir($base.'/'.$dir);
@@ -35,30 +37,28 @@ function search(&$data,$base,$func,$opts,$dir='',$lvl=1){
             continue;
         }
         $files[] = $dir.'/'.$file;
+        $filepaths[] = $base.'/'.$dir.'/'.$file;
     }
     closedir($dh);
-    sort($files);
-    sort($dirs);
+    if (!empty($sort)) {
+        if ($sort == 'date') {
+            @array_multisort(array_map('filemtime', $filepaths), SORT_NUMERIC, SORT_DESC, $files);
+        } else /* natural */ {
+            natsort($files);
+        }
+        natsort($dirs);
+    }
 
     //give directories to userfunction then recurse
     foreach($dirs as $dir){
         if (call_user_func_array($func, array(&$data,$base,$dir,'d',$lvl,$opts))){
-            search($data,$base,$func,$opts,$dir,$lvl+1);
+            search($data,$base,$func,$opts,$dir,$lvl+1,$sort);
         }
     }
     //now handle the files
     foreach($files as $file){
         call_user_func_array($func, array(&$data,$base,$file,'f',$lvl,$opts));
     }
-}
-
-/**
- * Wrapper around call_user_func_array.
- *
- * @deprecated
- */
-function search_callback($func,&$data,$base,$file,$type,$lvl,$opts){
-    return call_user_func_array($func, array(&$data,$base,$file,$type,$lvl,$opts));
 }
 
 /**
@@ -78,8 +78,8 @@ function search_callback($func,&$data,$base,$file,$type,$lvl,$opts){
  * return values for files are ignored
  *
  * All functions should check the ACL for document READ rights
- * namespaces (directories) are NOT checked as this would break
- * the recursion (You can have an nonreadable dir over a readable
+ * namespaces (directories) are NOT checked (when sneaky_index is 0) as this
+ * would break the recursion (You can have an nonreadable dir over a readable
  * one deeper nested) also make sure to check the file type (for example
  * in case of lockfiles).
  */
@@ -101,45 +101,22 @@ function search_qsearch(&$data,$base,$file,$type,$lvl,$opts){
 /**
  * Build the browsable index of pages
  *
- * $opts['ns'] is the current namespace
+ * $opts['ns'] is the currently viewed namespace
  *
  * @author  Andreas Gohr <andi@splitbrain.org>
  */
 function search_index(&$data,$base,$file,$type,$lvl,$opts){
     global $conf;
-    $return = true;
+    $opts = array(
+        'pagesonly' => true,
+        'listdirs' => true,
+        'listfiles' => !$opts['nofiles'],
+        'sneakyacl' => $conf['sneaky_index'],
+        // Hacky, should rather use recmatch
+        'depth' => preg_match('#^'.preg_quote($file, '#').'(/|$)#','/'.$opts['ns']) ? 0 : -1
+    );
 
-    $item = array();
-
-    if($type == 'd' && !preg_match('#^'.$file.'(/|$)#','/'.$opts['ns'])){
-        //add but don't recurse
-        $return = false;
-    }elseif($type == 'f' && ($opts['nofiles'] || substr($file,-4) != '.txt')){
-        //don't add
-        return false;
-    }
-
-    $id = pathID($file,($type == 'd'));
-
-    if($type=='d' && $conf['sneaky_index'] && auth_quickaclcheck($id.':') < AUTH_READ){
-        return false;
-    }
-
-    //check hidden
-    if(isHiddenPage($id)){
-        return false;
-    }
-
-    //check ACL
-    if($type=='f' && auth_quickaclcheck($id) < AUTH_READ){
-        return false;
-    }
-
-    $data[]=array( 'id'    => $id,
-            'type'  => $type,
-            'level' => $lvl,
-            'open'  => $return );
-    return $return;
+    return search_universal($data, $base, $file, $type, $lvl, $opts);
 }
 
 /**
@@ -188,7 +165,7 @@ function search_media(&$data,$base,$file,$type,$lvl,$opts){
         return false;
     }
 
-    $info['file']     = basename($file);
+    $info['file']     = utf8_basename($file);
     $info['size']     = filesize($base.'/'.$file);
     $info['mtime']    = filemtime($base.'/'.$file);
     $info['writable'] = is_writable($base.'/'.$file);
@@ -264,11 +241,16 @@ function search_pagename(&$data,$base,$file,$type,$lvl,$opts){
  * @author  Andreas Gohr <andi@splitbrain.org>
  */
 function search_allpages(&$data,$base,$file,$type,$lvl,$opts){
+    if(isset($opts['depth']) && $opts['depth']){
+        $parts = explode('/',ltrim($file,'/'));
+        if(($type == 'd' && count($parts) >= $opts['depth'])
+          || ($type != 'd' && count($parts) > $opts['depth'])){
+            return false; // depth reached
+        }
+    }
+
     //we do nothing with directories
     if($type == 'd'){
-        if(!$opts['depth']) return true; // recurse forever
-        $parts = explode('/',ltrim($file,'/'));
-        if(count($parts) == $opts['depth']) return false; // depth reached
         return true;
     }
 
@@ -292,125 +274,25 @@ function search_allpages(&$data,$base,$file,$type,$lvl,$opts){
 }
 
 /**
- * Search for backlinks to a given page
+ * Reference search
+ * This fuction searches for existing references to a given media file
+ * and returns an array with the found pages. It doesn't pay any
+ * attention to ACL permissions to find every reference. The caller
+ * must check if the user has the appropriate rights to see the found
+ * page and eventually have to prevent the result from displaying.
  *
- * $opts['ns']    namespace of the page
- * $opts['name']  name of the page without namespace
+ * @param array  $data Reference to the result data structure
+ * @param string $base Base usually $conf['datadir']
+ * @param string $file current file or directory relative to $base
+ * @param char   $type Type either 'd' for directory or 'f' for file
+ * @param int    $lvl  Current recursion depht
+ * @param mixed  $opts option array as given to search()
  *
- * @author  Andreas Gohr <andi@splitbrain.org>
- * @deprecated Replaced by ft_backlinks()
- */
-function search_backlinks(&$data,$base,$file,$type,$lvl,$opts){
-    //we do nothing with directories
-    if($type == 'd') return true;
-    //only search txt files
-    if(substr($file,-4) != '.txt') return true;
-
-    //absolute search id
-    $sid = cleanID($opts['ns'].':'.$opts['name']);
-
-    //current id and namespace
-    $cid = pathID($file);
-    $cns = getNS($cid);
-
-    //check ACL
-    if(auth_quickaclcheck($cid) < AUTH_READ){
-        return false;
-    }
-
-    //fetch instructions
-    $instructions = p_cached_instructions($base.$file,true);
-    if(is_null($instructions)) return false;
-
-    global $conf;
-    //check all links for match
-    foreach($instructions as $ins){
-        if($ins[0] == 'internallink' || ($conf['camelcase'] && $ins[0] == 'camelcaselink') ){
-            $mid = $ins[1][0];
-            resolve_pageid($cns,$mid,$exists); //exists is not used
-            if($mid == $sid){
-                //we have a match - finish
-                $data[]['id'] = $cid;
-                break;
-            }
-        }
-    }
-
-    return false;
-}
-
-/**
- * Fulltextsearch
- *
- * $opts['query'] is the search query
+ * $opts['query'] is the demanded media file name
  *
  * @author  Andreas Gohr <andi@splitbrain.org>
- * @deprecated - fulltext indexer is used instead
+ * @author  Matthias Grimm <matthiasgrimm@users.sourceforge.net>
  */
-function search_fulltext(&$data,$base,$file,$type,$lvl,$opts){
-    //we do nothing with directories
-    if($type == 'd') return true;
-    //only search txt files
-    if(substr($file,-4) != '.txt') return true;
-
-    //check ACL
-    $id = pathID($file);
-    if(auth_quickaclcheck($id) < AUTH_READ){
-        return false;
-    }
-
-    //create regexp from queries
-    $poswords = array();
-    $negwords = array();
-    $qpreg = preg_split('/\s+/',$opts['query']);
-
-    foreach($qpreg as $word){
-        switch(substr($word,0,1)){
-            case '-':
-                if(strlen($word) > 1){  // catch single '-'
-                    array_push($negwords,preg_quote(substr($word,1),'#'));
-                }
-                break;
-            case '+':
-                if(strlen($word) > 1){  // catch single '+'
-                    array_push($poswords,preg_quote(substr($word,1),'#'));
-                }
-                break;
-            default:
-                array_push($poswords,preg_quote($word,'#'));
-                break;
-        }
-    }
-
-    // a search without any posword is useless
-    if (!count($poswords)) return true;
-
-    $reg  = '^(?=.*?'.join(')(?=.*?',$poswords).')';
-            $reg .= count($negwords) ? '((?!'.join('|',$negwords).').)*$' : '.*$';
-            search_regex($data,$base,$file,$reg,$poswords);
-            return true;
-            }
-
-            /**
-             * Reference search
-             * This fuction searches for existing references to a given media file
-             * and returns an array with the found pages. It doesn't pay any
-             * attention to ACL permissions to find every reference. The caller
-             * must check if the user has the appropriate rights to see the found
-             * page and eventually have to prevent the result from displaying.
-             *
-             * @param array  $data Reference to the result data structure
-             * @param string $base Base usually $conf['datadir']
-             * @param string $file current file or directory relative to $base
-             * @param char   $type Type either 'd' for directory or 'f' for file
-             * @param int    $lvl  Current recursion depht
-             * @param mixed  $opts option array as given to search()
-             *
-             * $opts['query'] is the demanded media file name
-             *
-             * @author  Andreas Gohr <andi@splitbrain.org>
-             * @author  Matthias Grimm <matthiasgrimm@users.sourceforge.net>
-             */
 function search_reference(&$data,$base,$file,$type,$lvl,$opts){
     global $conf;
 
@@ -431,57 +313,6 @@ function search_reference(&$data,$base,$file,$type,$lvl,$opts){
 }
 
 /* ------------- helper functions below -------------- */
-
-/**
- * fulltext search helper
- * searches a text file with a given regular expression
- * no ACL checks are performed. This have to be done by
- * the caller if necessary.
- *
- * @param array  $data  reference to array for results
- * @param string $base  base directory
- * @param string $file  file name to search in
- * @param string $reg   regular expression to search for
- * @param array  $words words that should be marked in the results
- *
- * @author  Andreas Gohr <andi@splitbrain.org>
- * @author  Matthias Grimm <matthiasgrimm@users.sourceforge.net>
- *
- * @deprecated - fulltext indexer is used instead
- */
-function search_regex(&$data,$base,$file,$reg,$words){
-
-    //get text
-    $text = io_readfile($base.'/'.$file);
-    //lowercase text (u modifier does not help with case)
-    $lctext = utf8_strtolower($text);
-
-    //do the fulltext search
-    $matches = array();
-    if($cnt = preg_match_all('#'.$reg.'#usi',$lctext,$matches)){
-        //this is not the best way for snippet generation but the fastest I could find
-        $q = $words[0];  //use first word for snippet creation
-        $p = utf8_strpos($lctext,$q);
-        $f = $p - 100;
-        $l = utf8_strlen($q) + 200;
-        if($f < 0) $f = 0;
-        $snippet = '<span class="search_sep"> ... </span>'.
-            htmlspecialchars(utf8_substr($text,$f,$l)).
-            '<span class="search_sep"> ... </span>';
-        $mark    = '('.join('|', $words).')';
-        $snippet = preg_replace('#'.$mark.'#si','<strong class="search_hit">\\1</strong>',$snippet);
-
-        $data[] = array(
-                'id'       => pathID($file),
-                'count'    => preg_match_all('#'.$mark.'#usi',$lctext,$matches),
-                'poswords' => join(' ',$words),
-                'snippet'  => $snippet,
-                );
-    }
-
-    return true;
-}
-
 
 /**
  * fulltext sort
@@ -606,7 +437,7 @@ function search_universal(&$data,$base,$file,$type,$lvl,$opts){
     $item['open']  = $return;
 
     if($opts['meta']){
-        $item['file']       = basename($file);
+        $item['file']       = utf8_basename($file);
         $item['size']       = filesize($base.'/'.$file);
         $item['mtime']      = filemtime($base.'/'.$file);
         $item['rev']        = $item['mtime'];
