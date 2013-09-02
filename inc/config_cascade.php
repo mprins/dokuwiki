@@ -5,7 +5,8 @@
  * This array configures the default locations of various files in the
  * DokuWiki directory hierarchy. It can be overriden in inc/preload.php
  */
-$config_cascade = array(
+$config_cascade = array_merge(
+    array(
         'main' => array(
             'default'   => array(DOKU_CONF.'dokuwiki.php'),
             'local'     => array(DOKU_CONF.'local.php'),
@@ -48,10 +49,13 @@ $config_cascade = array(
             'local'     => array(DOKU_CONF.'wordblock.local.conf'),
             ),
         'userstyle' => array(
-            'default' => DOKU_CONF.'userstyle.css',
-            'print'   => DOKU_CONF.'printstyle.css',
-            'feed'    => DOKU_CONF.'feedstyle.css',
-            'all'     => DOKU_CONF.'allstyle.css',
+            'screen'  => DOKU_CONF.'userstyle.css',
+            // @deprecated 2012-04-09: rtl will cease to be a mode of its own,
+            //     please use "[dir=rtl]" in any css file in all, screen or print mode instead
+            'rtl'     => DOKU_CONF.'userrtl.css',
+            'print'   => DOKU_CONF.'userprint.css',
+            'feed'    => DOKU_CONF.'userfeed.css',
+            'all'     => DOKU_CONF.'userall.css',
             ),
         'userscript' => array(
             'default' => DOKU_CONF.'userscript.js'
@@ -62,5 +66,16 @@ $config_cascade = array(
         'plainauth.users' => array(
             'default' => DOKU_CONF.'users.auth.php',
             ),
+
+        'plugins' => array(
+            'default'   => array(DOKU_CONF.'plugins.php'),
+            'local'     => array(DOKU_CONF.'plugins.local.php'),
+            'protected' => array(
+                DOKU_CONF.'plugins.required.php',
+                DOKU_CONF.'plugins.protected.php',
+                ),
+            ),
+        ),
+        $config_cascade
 );
 

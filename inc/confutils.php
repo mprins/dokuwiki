@@ -115,7 +115,11 @@ function getWordblocks() {
     return $wordblocks;
 }
 
-
+/**
+ * Gets the list of configured schemes
+ *
+ * @return array the schemes
+ */
 function getSchemes() {
     static $schemes = null;
     if ( !$schemes ) {
@@ -139,6 +143,9 @@ function getSchemes() {
  */
 function linesToHash($lines, $lower=false) {
     $conf = array();
+    // remove BOM
+    if (isset($lines[0]) && substr($lines[0],0,3) == pack('CCC',0xef,0xbb,0xbf))
+        $lines[0] = substr($lines[0],3);
     foreach ( $lines as $line ) {
         //ignore comments (except escaped ones)
         $line = preg_replace('/(?<![&\\\\])#.*$/','',$line);
@@ -182,7 +189,7 @@ function confToHash($file,$lower=false) {
  *
  * @param  string   $type     the configuration settings to be read, must correspond to a key/array in $config_cascade
  * @param  callback $fn       the function used to process the configuration file into an array
- * @param  array    $param    optional additional params to pass to the callback
+ * @param  array    $params   optional additional params to pass to the callback
  * @return array    configuration values
  */
 function retrieveConfig($type,$fn,$params=null) {
@@ -236,21 +243,29 @@ function actionOK($action){
     static $disabled = null;
     if(is_null($disabled)){
         global $conf;
+        /** @var auth_basic $auth */
         global $auth;
 
         // prepare disabled actions array and handle legacy options
         $disabled = explode(',',$conf['disableactions']);
         $disabled = array_map('trim',$disabled);
-        if(isset($conf['openregister']) && !$conf['openregister']) $disabled[] = 'register';
-        if(isset($conf['resendpasswd']) && !$conf['resendpasswd']) $disabled[] = 'resendpwd';
-        if(isset($conf['subscribers']) && !$conf['subscribers']) {
-            $disabled[] = 'subscribe';
-        }
-        if (is_null($auth) || !$auth->canDo('addUser')) {
+        if((isset($conf['openregister']) && !$conf['openregister']) || is_null($auth) || !$auth->canDo('addUser')) {
             $disabled[] = 'register';
         }
-        if (is_null($auth) || !$auth->canDo('modPass')) {
+        if((isset($conf['resendpasswd']) && !$conf['resendpasswd']) || is_null($auth) || !$auth->canDo('modPass')) {
             $disabled[] = 'resendpwd';
+        }
+        if((isset($conf['subscribers']) && !$conf['subscribers']) || is_null($auth)) {
+            $disabled[] = 'subscribe';
+        }
+        if (is_null($auth) || !$auth->canDo('Profile')) {
+            $disabled[] = 'profile';
+        }
+        if (is_null($auth)) {
+            $disabled[] = 'login';
+        }
+        if (is_null($auth) || !$auth->canDo('logout')) {
+            $disabled[] = 'logout';
         }
         $disabled = array_unique($disabled);
     }
@@ -265,7 +280,7 @@ function actionOK($action){
  *
  * @param   string  $linktype   'content'|'navigation', content applies to links in wiki text
  *                                                      navigation applies to all other links
- * @returns boolean             true if headings should be used for $linktype, false otherwise
+ * @return  boolean             true if headings should be used for $linktype, false otherwise
  */
 function useHeading($linktype) {
     static $useHeading = null;
@@ -324,4 +339,4 @@ function conf_decodeString($str) {
                      return $str;
     }
 }
-//Setup VIM: ex: et ts=4 enc=utf-8 :
+//Setup VIM: ex: et ts=4 :

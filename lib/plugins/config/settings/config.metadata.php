@@ -16,6 +16,7 @@
  *   ''             - default class ('setting'), textarea, minimal input validation, setting output in quotes
  *   'string'       - single line text input, minimal input validation, setting output in quotes
  *   'numeric'      - text input, accepts numbers and arithmetic operators, setting output without quotes
+ *                    if given the '_min' and '_max' parameters are used for validation
  *   'numericopt'   - like above, but accepts empty values
  *   'onoff'        - checkbox input, setting output  0|1
  *   'multichoice'  - select input (single choice), setting output with quotes, required _choices parameter
@@ -54,6 +55,8 @@
  *   '_combine'    - complimentary output setting values which can be combined into a single display checkbox
  *                   optional for 'multicheckbox', ignored by other classes
  *   '_code'       - encoding method to use, accepted values: 'base64','uuencode','plain'.  defaults to plain.
+ *   '_min'        - minimum numeric value, optional for 'numeric' and 'numericopt', ignored by others
+ *   '_max'        - maximum numeric value, optional for 'numeric' and 'numericopt', ignored by others
  *
  * @author    Chris Smith <chris@jalakai.co.uk>
  */
@@ -88,17 +91,21 @@ $meta['title']    = array('string');
 $meta['start']    = array('string','_pattern' => '!^[^:;/]+$!'); // don't accept namespaces
 $meta['lang']     = array('dirchoice','_dir' => DOKU_INC.'inc/lang/');
 $meta['template'] = array('dirchoice','_dir' => DOKU_INC.'lib/tpl/','_pattern' => '/^[\w-]+$/');
+$meta['tagline']  = array('string');
+$meta['sidebar']  = array('string');
 $meta['license']  = array('license');
 $meta['savedir']  = array('savedir');
 $meta['basedir']  = array('string');
 $meta['baseurl']  = array('string');
+$meta['cookiedir'] = array('string');
 $meta['dmode']    = array('numeric','_pattern' => '/0[0-7]{3,4}/'); // only accept octal representation
 $meta['fmode']    = array('numeric','_pattern' => '/0[0-7]{3,4}/'); // only accept octal representation
 $meta['allowdebug']  = array('onoff');
 
 $meta['_display']    = array('fieldset');
 $meta['recent']      = array('numeric');
-$meta['breadcrumbs'] = array('numeric');
+$meta['recent_days'] = array('numeric');
+$meta['breadcrumbs'] = array('numeric','_min' => 0);
 $meta['youarehere']  = array('onoff');
 $meta['fullpath']    = array('onoff');
 $meta['typography']  = array('multichoice','_choices' => array(0,1,2));
@@ -112,28 +119,26 @@ $meta['maxseclevel'] = array('multichoice','_choices' => array(0,1,2,3,4,5)); //
 $meta['camelcase']   = array('onoff');
 $meta['deaccent']    = array('multichoice','_choices' => array(0,1,2));
 $meta['useheading']  = array('multichoice','_choices' => array(0,'navigation','content',1));
-$meta['refcheck']    = array('onoff');
-$meta['refshow']     = array('numeric');
+$meta['sneaky_index'] = array('onoff');
+$meta['hidepages']   = array('string');
 
 $meta['_authentication'] = array('fieldset');
 $meta['useacl']      = array('onoff');
 $meta['autopasswd']  = array('onoff');
 $meta['authtype']    = array('authtype');
-$meta['passcrypt']   = array('multichoice','_choices' => array('smd5','md5','apr1','sha1','ssha','crypt','mysql','my411','kmd5'));
+$meta['passcrypt']   = array('multichoice','_choices' => array('smd5','md5','apr1','sha1','ssha','lsmd5','crypt','mysql','my411','kmd5','pmd5','hmd5','bcrypt'));
 $meta['defaultgroup']= array('string');
 $meta['superuser']   = array('string');
 $meta['manager']     = array('string');
 $meta['profileconfirm'] = array('onoff');
 $meta['rememberme'] = array('onoff');
-$meta['registernotify'] = array('email');
 $meta['disableactions'] = array('disableactions',
                                 '_choices' => array('backlink','index','recent','revisions','search','subscription','register','resendpwd','profile','edit','wikicode','check'),
                                 '_combine' => array('subscription' => array('subscribe','unsubscribe'), 'wikicode' => array('source','export_raw')));
-$meta['sneaky_index'] = array('onoff');
 $meta['auth_security_timeout'] = array('numeric');
 $meta['securecookie'] = array('onoff');
-$meta['xmlrpc']       = array('onoff');
-$meta['xmlrpcuser']   = array('string');
+$meta['remote']       = array('onoff');
+$meta['remoteuser']   = array('string');
 
 $meta['_anti_spam']  = array('fieldset');
 $meta['usewordblock']= array('onoff');
@@ -146,9 +151,6 @@ $meta['_editing']    = array('fieldset');
 $meta['usedraft']    = array('onoff');
 $meta['htmlok']      = array('onoff');
 $meta['phpok']       = array('onoff');
-$meta['notify']      = array('email', '_multiple' => true);
-$meta['subscribers'] = array('onoff');
-$meta['subscribe_time'] = array('numeric');
 $meta['locktime']    = array('numeric');
 $meta['cachetime']   = array('numeric');
 
@@ -160,10 +162,31 @@ $meta['target____media']     = array('string');
 $meta['target____windows']   = array('string');
 
 $meta['_media']      = array('fieldset');
+$meta['mediarevisions']  = array('onoff');
 $meta['gdlib']       = array('multichoice','_choices' => array(0,1,2));
 $meta['im_convert']  = array('im_convert');
 $meta['jpg_quality'] = array('numeric','_pattern' => '/^100$|^[1-9]?[0-9]$/');  //(0-100)
 $meta['fetchsize']   = array('numeric');
+$meta['refcheck']    = array('onoff');
+$meta['refshow']     = array('numeric');
+
+$meta['_notifications'] = array('fieldset');
+$meta['subscribers']    = array('onoff');
+$meta['subscribe_time'] = array('numeric');
+$meta['notify']         = array('email', '_multiple' => true);
+$meta['registernotify'] = array('email');
+$meta['mailfrom']       = array('richemail');
+$meta['mailprefix']     = array('string');
+$meta['htmlmail']       = array('onoff');
+
+$meta['_syndication'] = array('fieldset');
+$meta['sitemap']     = array('numeric');
+$meta['rss_type']    = array('multichoice','_choices' => array('rss','rss1','rss2','atom','atom1'));
+$meta['rss_linkto']  = array('multichoice','_choices' => array('diff','page','rev','current'));
+$meta['rss_content'] = array('multichoice','_choices' => array('abstract','diff','htmldiff','html'));
+$meta['rss_media']   = array('multichoice','_choices' => array('both','pages','media'));
+$meta['rss_update']  = array('numeric');
+$meta['rss_show_summary'] = array('onoff');
 
 $meta['_advanced']   = array('fieldset');
 $meta['updatecheck'] = array('onoff');
@@ -173,25 +196,18 @@ $meta['sepchar']     = array('sepchar');
 $meta['canonical']   = array('onoff');
 $meta['fnencode']    = array('multichoice','_choices' => array('url','safe','utf-8'));
 $meta['autoplural']  = array('onoff');
-$meta['mailfrom']    = array('richemail');
 $meta['compress']    = array('onoff');
+$meta['cssdatauri']  = array('numeric','_pattern' => '/^\d+$/');
 $meta['gzip_output'] = array('onoff');
-$meta['hidepages']   = array('string');
 $meta['send404']     = array('onoff');
 $meta['compression'] = array('compression');
-$meta['sitemap']     = array('numeric');
-$meta['rss_type']    = array('multichoice','_choices' => array('rss','rss1','rss2','atom','atom1'));
-$meta['rss_linkto']  = array('multichoice','_choices' => array('diff','page','rev','current'));
-$meta['rss_content'] = array('multichoice','_choices' => array('abstract','diff','htmldiff','html'));
-$meta['rss_update']  = array('numeric');
-$meta['recent_days'] = array('numeric');
-$meta['rss_show_summary'] = array('onoff');
 $meta['broken_iua']  = array('onoff');
 $meta['xsendfile']   = array('multichoice','_choices' => array(0,1,2,3));
 $meta['renderer_xhtml'] = array('renderer','_format' => 'xhtml','_choices' => array('xhtml'));
 $meta['readdircache'] = array('numeric');
 
 $meta['_network']    = array('fieldset');
+$meta['dnslookups']  = array('onoff');
 $meta['proxy____host'] = array('string','_pattern' => '#^(|[a-z0-9\-\.+]+)$#i');
 $meta['proxy____port'] = array('numericopt');
 $meta['proxy____user'] = array('string');

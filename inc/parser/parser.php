@@ -52,6 +52,9 @@ class Doku_Parser {
 
     var $Handler;
 
+    /**
+     * @var Doku_Lexer $Lexer
+     */
     var $Lexer;
 
     var $modes = array();
@@ -59,11 +62,11 @@ class Doku_Parser {
     var $connected = false;
 
     function addBaseMode(& $BaseMode) {
-        $this->modes['base'] = & $BaseMode;
+        $this->modes['base'] =& $BaseMode;
         if ( !$this->Lexer ) {
             $this->Lexer = new Doku_Lexer($this->Handler,'base', true);
         }
-        $this->modes['base']->Lexer = & $this->Lexer;
+        $this->modes['base']->Lexer =& $this->Lexer;
     }
 
     /**
@@ -75,7 +78,7 @@ class Doku_Parser {
             $this->addBaseMode(new Doku_Parser_Mode_base());
         }
         $Mode->Lexer = & $this->Lexer;
-        $this->modes[$name] = & $Mode;
+        $this->modes[$name] =& $Mode;
     }
 
     function connectModes() {
@@ -90,7 +93,6 @@ class Doku_Parser {
             if ( $mode == 'base' ) {
                 continue;
             }
-
             $this->modes[$mode]->preConnect();
 
             foreach ( array_keys($this->modes) as $cm ) {
@@ -135,6 +137,9 @@ class Doku_Parser {
 */
 class Doku_Parser_Mode {
 
+    /**
+     * @var Doku_Lexer $Lexer
+     */
     var $Lexer;
 
     var $allowedModes = array();
@@ -218,11 +223,11 @@ class Doku_Parser_Mode_footnote extends Doku_Parser_Mode {
 //-------------------------------------------------------------------
 class Doku_Parser_Mode_header extends Doku_Parser_Mode {
 
-    function preConnect() {
+    function connectTo($mode) {
         //we're not picky about the closing ones, two are enough
         $this->Lexer->addSpecialPattern(
                             '[ \t]*={2,}[^\n]+={2,}[ \t]*(?=\n)',
-                            'base',
+                            $mode,
                             'header'
                         );
     }
@@ -829,7 +834,7 @@ class Doku_Parser_Mode_internallink extends Doku_Parser_Mode {
 
     function connectTo($mode) {
         // Word boundaries?
-        $this->Lexer->addSpecialPattern("\[\[.+?\]\]",$mode,'internallink');
+        $this->Lexer->addSpecialPattern("\[\[(?:(?:[^[\]]*?\[.*?\])|.*?)\]\]",$mode,'internallink');
     }
 
     function getSort() {
@@ -871,7 +876,7 @@ class Doku_Parser_Mode_externallink extends Doku_Parser_Mode {
         if(count($this->patterns)) return;
 
         $ltrs = '\w';
-        $gunk = '/\#~:.?+=&%@!\-';
+        $gunk = '/\#~:.?+=&%@!\-\[\]';
         $punc = '.:?\-;,';
         $host = $ltrs.$punc;
         $any  = $ltrs.$gunk.$punc;
@@ -930,7 +935,7 @@ class Doku_Parser_Mode_windowssharelink extends Doku_Parser_Mode {
     var $pattern;
 
     function preConnect() {
-        $this->pattern = "\\\\\\\\\w+?(?:\\\\[\w$]+)+";
+        $this->pattern = "\\\\\\\\\w+?(?:\\\\[\w-$]+)+";
     }
 
     function connectTo($mode) {
@@ -957,4 +962,4 @@ class Doku_Parser_Mode_emaillink extends Doku_Parser_Mode {
 }
 
 
-//Setup VIM: ex: et ts=4 enc=utf-8 :
+//Setup VIM: ex: et ts=4 :

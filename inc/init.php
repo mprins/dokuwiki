@@ -3,15 +3,16 @@
  * Initialize some defaults needed for DokuWiki
  */
 
-// start timing Dokuwiki execution
+/**
+ * timing Dokuwiki execution
+ */
 function delta_time($start=0) {
-    list($usec, $sec) = explode(" ", microtime());
-    return ((float)$usec+(float)$sec)-((float)$start);
+    return microtime(true)-((float)$start);
 }
 define('DOKU_START_TIME', delta_time());
 
 global $config_cascade;
-$config_cascade = '';
+$config_cascade = array();
 
 // if available load a preload config file
 $preload = fullpath(dirname(__FILE__)).'/preload.php';
@@ -31,8 +32,8 @@ if (!defined('DOKU_E_LEVEL') && @file_exists(DOKU_CONF.'report_e_all')) {
     define('DOKU_E_LEVEL', E_ALL);
 }
 if (!defined('DOKU_E_LEVEL')) {
-    if(defined('E_DEPRECATED')){ // since php 5.3
-        error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED);
+    if(defined('E_DEPRECATED')){ // since php 5.3, since php 5.4 E_STRICT is part of E_ALL
+        error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_STRICT);
     }else{
         error_reporting(E_ALL ^ E_NOTICE);
     }
@@ -52,10 +53,9 @@ global $cache_authname;
 global $cache_metadata;
        $cache_metadata = array();
 
-//set the configuration cascade - but only if its not already been set in preload.php
-if (empty($config_cascade)) {
-    include(DOKU_INC.'inc/config_cascade.php');
-}
+// always include 'inc/config_cascade.php'
+// previously in preload.php set fields of $config_cascade will be merged with the defaults
+include(DOKU_INC.'inc/config_cascade.php');
 
 //prepare config array()
 global $conf;
@@ -69,16 +69,6 @@ foreach (array('default','local','protected') as $config_group) {
             include($config_file);
         }
     }
-}
-
-//prepare language array
-global $lang;
-$lang = array();
-
-//load the language files
-require_once(DOKU_INC.'inc/lang/en/lang.php');
-if ( $conf['lang'] && $conf['lang'] != 'en' ) {
-    require_once(DOKU_INC.'inc/lang/'.$conf['lang'].'/lang.php');
 }
 
 //prepare license array()
@@ -120,11 +110,11 @@ if (!defined('DOKU_COOKIE')) define('DOKU_COOKIE', 'DW'.md5(DOKU_REL.(($conf['se
 // define main script
 if(!defined('DOKU_SCRIPT')) define('DOKU_SCRIPT','doku.php');
 
-// define Template baseURL
+// DEPRECATED, use tpl_basedir() instead
 if(!defined('DOKU_TPL')) define('DOKU_TPL',
         DOKU_BASE.'lib/tpl/'.$conf['template'].'/');
 
-// define real Template directory
+// DEPRECATED, use tpl_incdir() instead
 if(!defined('DOKU_TPLINC')) define('DOKU_TPLINC',
         DOKU_INC.'lib/tpl/'.$conf['template'].'/');
 
@@ -139,19 +129,24 @@ if(!defined('DOKU_TPLINC')) define('DOKU_TPLINC',
 
 // enable gzip compression if supported
 $conf['gzip_output'] &= (strpos($_SERVER['HTTP_ACCEPT_ENCODING'],'gzip') !== false);
+global $ACT;
 if ($conf['gzip_output'] &&
         !defined('DOKU_DISABLE_GZIP_OUTPUT') &&
-        function_exists('ob_gzhandler')) {
+        function_exists('ob_gzhandler') &&
+        // Disable compression when a (compressed) sitemap might be delivered
+        // See https://bugs.dokuwiki.org/index.php?do=details&task_id=2576
+        $ACT != 'sitemap') {
     ob_start('ob_gzhandler');
 }
 
 // init session
 if (!headers_sent() && !defined('NOSESSION')){
     session_name("DokuWiki");
+    $cookieDir = empty($conf['cookiedir']) ? DOKU_REL : $conf['cookiedir'];
     if (version_compare(PHP_VERSION, '5.2.0', '>')) {
-        session_set_cookie_params(0,DOKU_REL,'',($conf['securecookie'] && is_ssl()),true);
+        session_set_cookie_params(0,$cookieDir,'',($conf['securecookie'] && is_ssl()),true);
     }else{
-        session_set_cookie_params(0,DOKU_REL,'',($conf['securecookie'] && is_ssl()));
+        session_set_cookie_params(0,$cookieDir,'',($conf['securecookie'] && is_ssl()));
     }
     session_start();
 
@@ -171,7 +166,7 @@ if (get_magic_quotes_gpc() && !defined('MAGIC_QUOTES_STRIPPED')) {
     @ini_set('magic_quotes_gpc', 0);
     define('MAGIC_QUOTES_STRIPPED',1);
 }
-@set_magic_quotes_runtime(0);
+if(function_exists('set_magic_quotes_runtime')) @set_magic_quotes_runtime(0);
 @ini_set('magic_quotes_sybase',0);
 
 // don't let cookies ever interfere with request vars
@@ -201,12 +196,16 @@ init_paths();
 init_files();
 
 // setup plugin controller class (can be overwritten in preload.php)
-$plugin_types = array('admin','syntax','action','renderer', 'helper');
+$plugin_types = array('admin','syntax','action','renderer', 'helper','remote');
 global $plugin_controller_class, $plugin_controller;
 if (empty($plugin_controller_class)) $plugin_controller_class = 'Doku_Plugin_Controller';
 
 // load libraries
 require_once(DOKU_INC.'inc/load.php');
+
+// input handle class
+global $INPUT;
+$INPUT = new Input();
 
 // initialize plugin controller
 $plugin_controller = new $plugin_controller_class();
@@ -214,6 +213,10 @@ $plugin_controller = new $plugin_controller_class();
 // initialize the event handler
 global $EVENT_HANDLER;
 $EVENT_HANDLER = new Doku_Event_Handler();
+
+$local = $conf['lang'];
+trigger_event('INIT_LANG_LOAD', $local, 'init_lang', true);
+
 
 // setup authentication system
 if (!defined('NOSESSION')) {
@@ -232,16 +235,19 @@ function init_paths(){
     $paths = array('datadir'   => 'pages',
             'olddir'    => 'attic',
             'mediadir'  => 'media',
+            'mediaolddir' => 'media_attic',
             'metadir'   => 'meta',
+            'mediametadir' => 'media_meta',
             'cachedir'  => 'cache',
             'indexdir'  => 'index',
             'lockdir'   => 'locks',
             'tmpdir'    => 'tmp');
 
-    foreach($paths as $c => $p){
-        if(empty($conf[$c]))  $conf[$c] = $conf['savedir'].'/'.$p;
-        $conf[$c]             = init_path($conf[$c]);
-        if(empty($conf[$c]))  nice_die("The $c ('$p') does not exist, isn't accessible or writable.
+    foreach($paths as $c => $p) {
+        $path = empty($conf[$c]) ? $conf['savedir'].'/'.$p : $conf[$c];
+        $conf[$c] = init_path($path);
+        if(empty($conf[$c]))
+            nice_die("The $c ('$p') at $path is not found, isn't accessible or writable.
                 You should check your config and permission settings.
                 Or maybe you want to <a href=\"install.php\">run the
                 installer</a>?");
@@ -255,8 +261,22 @@ function init_paths(){
     $conf['media_changelog'] = $conf['metadir'].'/_media.changes';
 }
 
+function init_lang($langCode) {
+    //prepare language array
+    global $lang;
+    $lang = array();
+
+    //load the language files
+    require_once(DOKU_INC.'inc/lang/en/lang.php');
+    if ($langCode && $langCode != 'en') {
+        if (file_exists(DOKU_INC."inc/lang/$langCode/lang.php")) {
+            require_once(DOKU_INC."inc/lang/$langCode/lang.php");
+        }
+    }
+}
+
 /**
- * Checks the existance of certain files and creates them if missing.
+ * Checks the existence of certain files and creates them if missing.
  */
 function init_files(){
     global $conf;
@@ -276,6 +296,7 @@ function init_files(){
     }
 
     # create title index (needs to have same length as page.idx)
+    /*
     $file = $conf['indexdir'].'/title.idx';
     if(!@file_exists($file)){
         $pages = file($conf['indexdir'].'/page.idx');
@@ -290,18 +311,19 @@ function init_files(){
             nice_die("$file is not writable. Check your permissions settings!");
         }
     }
+    */
 }
 
 /**
  * Returns absolute path
  *
  * This tries the given path first, then checks in DOKU_INC.
- * Check for accessability on directories as well.
+ * Check for accessibility on directories as well.
  *
  * @author Andreas Gohr <andi@splitbrain.org>
  */
 function init_path($path){
-    // check existance
+    // check existence
     $p = fullpath($path);
     if(!@file_exists($p)){
         $p = fullpath(DOKU_INC.$path);
@@ -419,14 +441,27 @@ function getBaseURL($abs=null){
     if($conf['baseurl']) return rtrim($conf['baseurl'],'/').$dir;
 
     //split hostheader into host and port
-    $addr = explode(':',$_SERVER['HTTP_HOST']);
-    $host = $addr[0];
-    $port = '';
-    if (isset($addr[1])) {
-        $port = $addr[1];
-    } elseif (isset($_SERVER['SERVER_PORT'])) {
+    if(isset($_SERVER['HTTP_HOST'])){
+        $parsed_host = parse_url('http://'.$_SERVER['HTTP_HOST']);
+        $host = $parsed_host['host'];
+        $port = $parsed_host['port'];
+    }elseif(isset($_SERVER['SERVER_NAME'])){
+        $parsed_host = parse_url('http://'.$_SERVER['SERVER_NAME']);
+        $host = $parsed_host['host'];
+        $port = $parsed_host['port'];
+    }else{
+        $host = php_uname('n');
+        $port = '';
+    }
+
+    if(!$port && isset($_SERVER['SERVER_PORT'])) {
         $port = $_SERVER['SERVER_PORT'];
     }
+
+    if(is_null($port)){
+        $port = '';
+    }
+
     if(!is_ssl()){
         $proto = 'http://';
         if ($port == '80') {
@@ -466,8 +501,7 @@ function is_ssl(){
  */
 function nice_die($msg){
     echo<<<EOT
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
-    "http://www.w3.org/TR/html4/loose.dtd">
+<!DOCTYPE html>
 <html>
 <head><title>DokuWiki Setup Error</title></head>
 <body style="font-family: Arial, sans-serif">
@@ -536,7 +570,7 @@ function fullpath($path,$exists=false){
     }
     $finalpath = $root.implode('/', $newpath);
 
-    // check for existance when needed (except when unit testing)
+    // check for existence when needed (except when unit testing)
     if($exists && !defined('DOKU_UNITTEST') && !@file_exists($finalpath)) {
         return false;
     }

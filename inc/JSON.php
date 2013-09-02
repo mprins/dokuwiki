@@ -47,8 +47,6 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
  * DAMAGE.
  *
- * @category
- * @package
  * @author      Michal Migurski <mike-json@teczno.com>
  * @author      Matt Knapp <mdknapp[at]gmail[dot]com>
  * @author      Brett Stimmerman <brettstimmerman[at]gmail[dot]com>
@@ -97,21 +95,18 @@ define('JSON_STRICT_TYPE', 11);
 
 /**
  * Converts to and from JSON format.
- *
- * @category
- * @package
- * @author     Michal Migurski <mike-json@teczno.com>
- * @author     Matt Knapp <mdknapp[at]gmail[dot]com>
- * @author     Brett Stimmerman <brettstimmerman[at]gmail[dot]com>
- * @copyright  2005 Michal Migurski
- * @license    http://www.php.net/license/3_0.txt  PHP License 3.0
- * @version
- * @link
- * @see
- * @since
- * @deprecated
  */
 class JSON {
+
+    /**
+     * Disables the use of PHP5's native json_decode()
+     *
+     * You shouldn't change this usually because the native function is much
+     * faster. However, this non-native will also parse slightly broken JSON
+     * which might be handy when talking to a non-conform endpoint
+     */
+    public $skipnative = false;
+
     /**
      * constructs a new JSON instance
      *
@@ -130,6 +125,7 @@ class JSON {
 
     /**
      * encodes an arbitrary variable into JSON format
+     * If available the native PHP JSON implementation is used.
      *
      * @param    mixed   $var    any number, boolean, string, array, or object to be encoded.
      *                           see argument 1 to JSON() above for array-parsing behavior.
@@ -140,6 +136,9 @@ class JSON {
      * @access   public
      */
     function encode($var) {
+        if (!$this->skipnative && function_exists('json_encode')){
+            return json_encode($var);
+        }
         switch (gettype($var)) {
             case 'boolean':
                 return $var ? 'true' : 'false';
@@ -352,6 +351,7 @@ class JSON {
 
     /**
      * decodes a JSON string into appropriate variable
+     * If available the native PHP JSON implementation is used.
      *
      * @param    string  $str    JSON-formatted string
      *
@@ -363,6 +363,10 @@ class JSON {
      * @access   public
      */
     function decode($str) {
+        if (!$this->skipnative && function_exists('json_decode')){
+            return json_decode($str,($this->use == JSON_LOOSE_TYPE));
+        }
+
         $str = $this->reduce_string($str);
 
         switch (strtolower($str)) {
@@ -565,17 +569,17 @@ class JSON {
 
                             }
 
-                        } elseif ((($chrs{$c} == '"') || ($chrs{$c} == "'")) &&
-                                 in_array($top['what'], array(JSON_SLICE, JSON_IN_ARR, JSON_IN_OBJ))) {
+                        } elseif ((($chrs{$c} == '"') || ($chrs{$c} == "'")) && ($top['what'] != JSON_IN_STR)) {
                             // found a quote, and we are not inside a string
                             array_push($stk, array('what' => JSON_IN_STR, 'where' => $c, 'delim' => $chrs{$c}));
                             //print("Found start of string at {$c}\n");
 
                         } elseif (($chrs{$c} == $top['delim']) &&
                                  ($top['what'] == JSON_IN_STR) &&
-                                 (($chrs{$c - 1} != "\\") ||
-                                 ($chrs{$c - 1} == "\\" && $chrs{$c - 2} == "\\"))) {
+                                 ((strlen(substr($chrs, 0, $c)) - strlen(rtrim(substr($chrs, 0, $c), '\\'))) % 2 != 1)) {
                             // found a quote, we're in a string, and it's not escaped
+                            // we know that it's not escaped becase there is _not_ an
+                            // odd number of backslashes at the end of the string so far
                             array_pop($stk);
                             //print("Found end of string at {$c}: ".substr($chrs, $top['where'], (1 + 1 + $c - $top['where']))."\n");
 

@@ -24,12 +24,15 @@ function checkUpdateMessages(){
     $lm = @filemtime($cf);
 
     // check if new messages needs to be fetched
-    if($lm < time()-(60*60*24) || $lm < @filemtime(DOKU_INC.'doku.php')){
+    if($lm < time()-(60*60*24) || $lm < @filemtime(DOKU_INC.DOKU_SCRIPT)){
+        dbglog("checkUpdatesMessages(): downloading messages.txt");
         $http = new DokuHTTPClient();
         $http->timeout = 8;
         $data = $http->get(DOKU_MESSAGEURL.$updateVersion);
         io_saveFile($cf,$data);
+        @touch($cf);
     }else{
+        dbglog("checkUpdatesMessages(): messages.txt up to date");
         $data = io_readFile($cf);
     }
 
@@ -66,8 +69,8 @@ function getVersionData(){
             $chunk = fread($fh,2000);
             fclose($fh);
             $chunk = trim($chunk);
-            $chunk = array_pop(explode("\n",$chunk));   //last log line
-            $chunk = array_shift(explode("\t",$chunk)); //strip commit msg
+            $chunk = @array_pop(explode("\n",$chunk));   //last log line
+            $chunk = @array_shift(explode("\t",$chunk)); //strip commit msg
             $chunk = explode(" ",$chunk);
             array_pop($chunk); //strip timezone
             $date = date('Y-m-d',array_pop($chunk));
@@ -145,38 +148,15 @@ function check(){
         }
     }
 
-    if(is_writable($conf['datadir'])){
-        msg('Datadir is writable',1);
+    if(is_writable(DOKU_CONF)){
+        msg('conf directory is writable',1);
     }else{
-        msg('Datadir is not writable',-1);
-    }
-
-    if(is_writable($conf['olddir'])){
-        msg('Attic is writable',1);
-    }else{
-        msg('Attic is not writable',-1);
-    }
-
-    if(is_writable($conf['mediadir'])){
-        msg('Mediadir is writable',1);
-    }else{
-        msg('Mediadir is not writable',-1);
-    }
-
-    if(is_writable($conf['cachedir'])){
-        msg('Cachedir is writable',1);
-    }else{
-        msg('Cachedir is not writable',-1);
-    }
-
-    if(is_writable($conf['lockdir'])){
-        msg('Lockdir is writable',1);
-    }else{
-        msg('Lockdir is not writable',-1);
+        msg('conf directory is not writable',-1);
     }
 
     if($conf['authtype'] == 'plain'){
-        if(is_writable(DOKU_CONF.'users.auth.php')){
+        global $config_cascade;
+        if(is_writable($config_cascade['plainauth.users']['default'])){
             msg('conf/users.auth.php is writable',1);
         }else{
             msg('conf/users.auth.php is not writable',0);
@@ -195,6 +175,16 @@ function check(){
     }else{
         msg('mb_string extension not available - PHP only replacements will be used',0);
     }
+
+    $loc = setlocale(LC_ALL, 0);
+    if(!$loc){
+        msg('No valid locale is set for your PHP setup. You should fix this',-1);
+    }elseif(stripos($loc,'utf') === false){
+        msg('Your locale <code>'.hsc($loc).'</code> seems not to be a UTF-8 locale, you should fix this if you encounter problems.',0);
+    }else{
+        msg('Valid locale '.hsc($loc).' found.', 1);
+    }
+
 
     if($conf['allowdebug']){
         msg('Debugging support is enabled. If you don\'t need it you should set $conf[\'allowdebug\'] = 0',-1);
@@ -223,21 +213,35 @@ function check(){
         msg('The current page is not writable by you',0);
     }
 
-    $check = wl('','',true).'data/_dummy';
-    $http = new DokuHTTPClient();
-    $http->timeout = 6;
-    $res = $http->get($check);
-    if(strpos($res,'data directory') !== false){
-        msg('It seems like the data directory is accessible from the web.
-                Make sure this directory is properly protected
-                (See <a href="http://www.dokuwiki.org/security">security</a>)',-1);
-    }elseif($http->status == 404 || $http->status == 403){
-        msg('The data directory seems to be properly protected',1);
-    }else{
-        msg('Failed to check if the data directory is accessible from the web.
-                Make sure this directory is properly protected
-                (See <a href="http://www.dokuwiki.org/security">security</a>)',-1);
+    // Check for corrupted search index
+    $lengths = idx_listIndexLengths();
+    $index_corrupted = false;
+    foreach ($lengths as $length) {
+        if (count(idx_getIndex('w', $length)) != count(idx_getIndex('i', $length))) {
+            $index_corrupted = true;
+            break;
+        }
     }
+
+    foreach (idx_getIndex('metadata', '') as $index) {
+        if (count(idx_getIndex($index.'_w', '')) != count(idx_getIndex($index.'_i', ''))) {
+            $index_corrupted = true;
+            break;
+        }
+    }
+
+    if ($index_corrupted)
+        msg('The search index is corrupted. It might produce wrong results and most
+                probably needs to be rebuilt. See
+                <a href="http://www.dokuwiki.org/faq:searchindex">faq:searchindex</a>
+                for ways to rebuild the search index.', -1);
+    elseif (!empty($lengths))
+        msg('The search index seems to be working', 1);
+    else
+        msg('The search index is empty. See
+                <a href="http://www.dokuwiki.org/faq:searchindex">faq:searchindex</a>
+                for help on how to fix the search index. If the default indexer
+                isn\'t used or the wiki is actually empty this is normal.');
 }
 
 /**
@@ -258,17 +262,17 @@ function check(){
  * @see    html_msgarea
  */
 function msg($message,$lvl=0,$line='',$file=''){
-    global $MSG;
+    global $MSG, $MSG_shown;
     $errors[-1] = 'error';
     $errors[0]  = 'info';
     $errors[1]  = 'success';
     $errors[2]  = 'notify';
 
-    if($line || $file) $message.=' ['.basename($file).':'.$line.']';
+    if($line || $file) $message.=' ['.utf8_basename($file).':'.$line.']';
 
     if(!isset($MSG)) $MSG = array();
     $MSG[]=array('lvl' => $errors[$lvl], 'msg' => $message);
-    if(headers_sent()){
+    if(isset($MSG_shown) || headers_sent()){
         if(function_exists('html_msgarea')){
             html_msgarea();
         }else{

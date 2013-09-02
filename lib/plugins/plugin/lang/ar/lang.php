@@ -4,6 +4,7 @@
  *
  * @author Yaman Hokan <always.smile.yh@hotmail.com>
  * @author Usama Akkad <uahello@gmail.com>
+ * @author uahello@gmail.com
  */
 $lang['menu']                  = 'إدارة الملحقات';
 $lang['download']              = 'نزّل و ثبت اضافة جديدة';
@@ -49,3 +50,4 @@ $lang['enabled']               = 'الاضافة %s فُعلت.	';
 $lang['notenabled']            = 'تعذر تفعيل الاضافة %s، تحقق من اذونات الملف.';
 $lang['disabled']              = 'عُطلت الإضافة %s.';
 $lang['notdisabled']           = 'تعذر تعطيل الإضافة %s، تحقق من اذونات الملف.';
+$lang['packageinstalled']      = 'حزمة الإضافة (%d plugin(s): %Xs) ثبتت بنجاج.';

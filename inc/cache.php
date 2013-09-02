@@ -69,7 +69,7 @@ class cache {
 
         if (!empty($this->depends['files'])) {
             foreach ($this->depends['files'] as $file) {
-                if ($this->_time < @filemtime($file)) return false;         // cache older than files it depends on?
+                if ($this->_time <= @filemtime($file)) return false;         // cache older than files it depends on?
             }
         }
 
@@ -84,7 +84,8 @@ class cache {
      * it should only overwrite a dependency when the new value is more stringent than the old
      */
     function _addDependencies() {
-        if (isset($_REQUEST['purge'])) $this->depends['purge'] = true;   // purge requested
+        global $INPUT;
+        if ($INPUT->has('purge')) $this->depends['purge'] = true;   // purge requested
     }
 
     /**
@@ -197,18 +198,6 @@ class cache_parser extends cache {
 }
 
 class cache_renderer extends cache_parser {
-
-    function useCache($depends=array()) {
-        $use = parent::useCache($depends);
-
-        // meta data needs to be kept in step with the cache
-        if (!$use && isset($this->page)) {
-            p_set_metadata($this->page,array(),true);
-        }
-
-        return $use;
-    }
-
     function _useCache() {
         global $conf;
 
@@ -217,6 +206,8 @@ class cache_renderer extends cache_parser {
         if (!isset($this->page)) {
             return true;
         }
+
+        if ($this->_time < @filemtime(metaFN($this->page,'.meta'))) return false;         // meta cache older than file it depends on?
 
         // check current link existence is consistent with cache version
         // first check the purgefile
@@ -250,20 +241,10 @@ class cache_renderer extends cache_parser {
         // page implies metadata and possibly some other dependencies
         if (isset($this->page)) {
 
-            $metafile = metaFN($this->page,'.meta');
-            if (@file_exists($metafile)) {
-                $files[] = $metafile;                                       // ... the page's own metadata
-                $files[] = DOKU_INC.'inc/parser/metadata.php';              // ... the metadata renderer
-
-                $valid = p_get_metadata($this->page, 'date valid');
-                if (!empty($valid['age'])) {
-                    $this->depends['age'] = isset($this->depends['age']) ?
-                        min($this->depends['age'],$valid['age']) : $valid['age'];
-                }
-
-            } else {
-                $this->depends['purge'] = true;                             // ... purging cache will generate metadata
-                return;
+            $valid = p_get_metadata($this->page, 'date valid');         // for xhtml this will render the metadata if needed
+            if (!empty($valid['age'])) {
+                $this->depends['age'] = isset($this->depends['age']) ?
+                    min($this->depends['age'],$valid['age']) : $valid['age'];
             }
         }
 

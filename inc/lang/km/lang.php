@@ -1,9 +1,6 @@
 <?php
 /**
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
- * @author     Andreas Gohr <andi@splitbrain.org>
- * @author     Anika Henke <henke@cosmocode.de>
- * @author     Matthias Grimm <matthiasgrimm@users.sourceforge.net>
  * @author     Ratana Lim <aerorat@yahoo.com>
  */
 $lang['encoding']   = 'utf-8';
@@ -42,10 +39,10 @@ $lang['btn_subscribe']   = 'ដាក់ដំណឹងផ្លស់ប្ត�
 $lang['btn_unsubscribe'] = 'ដកដំណឹងផ្លស់ប្តូរ';
 $lang['btn_profile']     = 'កែប្រវត្តិរូប';
 $lang['btn_reset']       = 'កមណត់ឡើងរិញ';
-$lang['btn_resendpwd']   = 'ផ្ញើពាក្សសម្ងាត់';
 $lang['btn_draft']    = 'កែគំរោង';
 $lang['btn_recover']  = 'ស្រោះគំរោងឡើង';
 $lang['btn_draftdel'] = 'លុបគំរោង';
+$lang['btn_register'] = 'ចុះឈ្មោះ';//'Register';
 
 $lang['loggedinas'] = 'អ្នកប្រើ';
 $lang['user']       = 'នាមបម្រើ';
@@ -56,7 +53,6 @@ $lang['passchk']    = 'ម្ដងទាត';
 $lang['remember']   = 'ចំណាំខ្ញុំ';
 $lang['fullname']   = 'នាមត្រគោល';
 $lang['email']      = 'អ៊ីមែល';
-$lang['register']   = 'ចុះឈ្មោះ';//'Register';
 $lang['profile']    = 'ប្រវត្តិរូប';// 'User Profile';
 $lang['badlogin']   = 'សុំអាទោស​ នាមបំរើ ឬ ពាក្សសម្ងាតមិនត្រវទេ។';
 $lang['minoredit']  = 'កែបបណ្តិចបណ្តួច';// 'Minor Changes';
@@ -79,7 +75,6 @@ $lang['profchanged']  = 'ប្រវត្តិរូបអ្នកប្រ�
 
 $lang['pwdforget'] = 'ភ្លិចពាក្សសម្ងាត់ យកមួយទាត។';
 $lang['resendna']  = 'វីគីនេះមិនឧបរំផ្ញើពាក្សសម្ងាតម្ដងទៀតទេ។';
-$lang['resendpwd'] = 'ផ្ញើពាក្សសម្ងាតឲ្យ';
 $lang['resendpwdmissing'] = 'សុំអាទោស​ អ្នកត្រវបំពេញវាល។';
 $lang['resendpwdnouser']  = 'សុំអាទោស​ យាងរកអ្នកប្រើមិនឃើងទេ។';
 $lang['resendpwdbadauth'] = 'សុំអាទោស​ រហស្សលេខអនុញ្ញាតពំអាចប្រើបានទេ។ ខ្សែបន្ត';
@@ -91,7 +86,7 @@ $lang['txt_filename'] = 'រុញឡើងជា (ស្រេច​ចិត�
 $lang['txt_overwrt']  = 'កត់ពីលើ';//'Overwrite existing file';
 $lang['lockedby']     = 'ឥឡូវនេះចកជាប់​';
 $lang['lockexpire']   = 'សោជាប់ផុត​កំណត់ម៉ោង';
-$lang['willexpire']   = 'សោអ្នកចំពោះកែតម្រូវទំព័រនេះ ហួសពែលក្នុងមួយនាទី។\nកុំឲ្យមានជម្លោះ ប្រើ «បង្ហាញ»​ ទៅកំណត់​ឡើង​វិញ។';
+$lang['js']['willexpire']   = 'សោអ្នកចំពោះកែតម្រូវទំព័រនេះ ហួសពែលក្នុងមួយនាទី។\nកុំឲ្យមានជម្លោះ ប្រើ «បង្ហាញ»​ ទៅកំណត់​ឡើង​វិញ។';
 
 $lang['js']['notsavedyet'] = "កម្រែមិនទានរុក្សាទកត្រូវបោះបង់។\nបន្តទៅទាឬទេ?";
 $lang['rssfailed']   = 'មានកំហុសពេលទៅ​ប្រមូល​យកមតិ​ព័ត៌មាន៖ ';
@@ -227,4 +222,4 @@ $lang['i_pol2']       = 'វីគីបិទជិត';
 
 $lang['i_retry']      = 'ម្តងទៀត';
 
-//Setup VIM: ex: et ts=2 enc=utf-8 :
+//Setup VIM: ex: et ts=2 :

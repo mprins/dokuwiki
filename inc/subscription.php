@@ -20,10 +20,11 @@
  * Get the name of the metafile tracking subscriptions to target page or
  * namespace
  *
+ * @author Adrian Lang <lang@cosmocode.de>
+ *
  * @param string $id The target page or namespace, specified by id; Namespaces
  *                   are identified by appending a colon.
- *
- * @author Adrian Lang <lang@cosmocode.de>
+ * @return string
  */
 function subscription_filename($id) {
     $meta_fname = '.mlist';
@@ -39,29 +40,37 @@ function subscription_filename($id) {
 /**
  * Lock subscription info for an ID
  *
+ * @author Adrian Lang <lang@cosmocode.de>
  * @param string $id The target page or namespace, specified by id; Namespaces
  *                   are identified by appending a colon.
- *
- * @author Adrian Lang <lang@cosmocode.de>
+ * @return string
  */
 function subscription_lock_filename ($id){
     global $conf;
-    return $conf['lockdir'].'/_subscr_' . $id . '.lock';
+    return $conf['lockdir'].'/_subscr_' . md5($id) . '.lock';
 }
 
+/**
+ * Creates a lock file for writing subscription data
+ *
+ * @todo add lock time parameter to io_lock() and use this instead
+ * @param $id
+ * @return bool
+ */
 function subscription_lock($id) {
-    // FIXME merge this with the indexer lock generation, abstract out
     global $conf;
     $lock = subscription_lock_filename($id);
-    while(!@mkdir($lock,$conf['dmode'])){
-        usleep(50);
-        if(time()-@filemtime($lock) > 60*5){
-            // looks like a stale lock - remove it
-            @rmdir($lock);
-        }else{
-            return false;
-        }
+
+    if (is_dir($lock) && time()-@filemtime($lock) > 60*5) {
+        // looks like a stale lock - remove it
+        @rmdir($lock);
     }
+
+    // try creating the lock directory
+    if (!@mkdir($lock,$conf['dmode'])) {
+        return false;
+    }
+
     if($conf['dperm']) chmod($lock, $conf['dperm']);
     return true;
 }
@@ -69,10 +78,10 @@ function subscription_lock($id) {
 /**
  * Unlock subscription info for an ID
  *
+ * @author Adrian Lang <lang@cosmocode.de>
  * @param string $id The target page or namespace, specified by id; Namespaces
  *                   are identified by appending a colon.
- *
- * @author Adrian Lang <lang@cosmocode.de>
+ * @return bool
  */
 function subscription_unlock($id) {
     $lockf = subscription_lock_filename($id);
@@ -91,6 +100,8 @@ function subscription_unlock($id) {
  * returned if a subscription should be deleted but the user is not subscribed
  * and the subscription meta file exists.
  *
+ * @author Adrian Lang <lang@cosmocode.de>
+ *
  * @param string $user      The subscriber or unsubscriber
  * @param string $page      The target object (page or namespace), specified by
  *                          id; Namespaces are identified by a trailing colon.
@@ -98,8 +109,7 @@ function subscription_unlock($id) {
  *                          “every”, “digest”, and “list”.
  * @param string $data      An optional data blob
  * @param bool   $overwrite Whether an existing subscription may be overwritten
- *
- * @author Adrian Lang <lang@cosmocode.de>
+ * @return bool
  */
 function subscription_set($user, $page, $style, $data = null,
                           $overwrite = false) {
@@ -122,7 +132,7 @@ function subscription_set($user, $page, $style, $data = null,
     // Delete subscription if one exists and $overwrite is true. If $overwrite
     // is false, fail.
     $subs = subscription_find($page, array('user' => $user));
-    if (count($subs) > 0 && array_pop(array_keys($subs)) === $page) {
+    if (count($subs) > 0 && isset($subs[$page])) {
         if (!$overwrite) {
             msg(sprintf($lang['subscr_already_subscribed'], $user,
                         prettyprint_id($page)), -1);
@@ -148,12 +158,12 @@ function subscription_set($user, $page, $style, $data = null,
  * This function searches all relevant subscription files for a page or
  * namespace.
  *
- * @param string $page The target object’s (namespace or page) id
- * @param array  $pre  A hash of predefined values
- *
+ * @author Adrian Lang <lang@cosmocode.de>
  * @see function subscription_regex for $pre documentation
  *
- * @author Adrian Lang <lang@cosmocode.de>
+ * @param string $page The target object’s (namespace or page) id
+ * @param array  $pre  A hash of predefined values
+ * @return array
  */
 function subscription_find($page, $pre) {
     // Construct list of files which may contain relevant subscriptions.
@@ -230,13 +240,15 @@ function get_info_subscribed() {
 /**
  * Construct a regular expression parsing a subscription definition line
  *
+ * @author Adrian Lang <lang@cosmocode.de>
+ *
  * @param array $pre A hash of predefined values; “user”, “style”, and
  *                   “data” may be set to limit the results to
  *                   subscriptions matching these parameters. If
  *                   “escaped” is true, these fields are inserted into the
  *                   regular expression without escaping.
  *
- * @author Adrian Lang <lang@cosmocode.de>
+ * @return string complete regexp including delimiters
  */
 function subscription_regex($pre = array()) {
     if (!isset($pre['escaped']) || $pre['escaped'] === false) {
@@ -257,15 +269,18 @@ function subscription_regex($pre = array()) {
  *
  * This is the default action for COMMON_NOTIFY_ADDRESSLIST.
  *
+ * @author Steven Danz <steven-danz@kc.rr.com>
+ * @author Adrian Lang <lang@cosmocode.de>
+ *
+ * @todo this does NOT return a string but uses a reference to write back, either fix function or docs
  * @param array $data Containing $id (the page id), $self (whether the author
  *                    should be notified, $addresslist (current email address
  *                    list)
- *
- * @author Steven Danz <steven-danz@kc.rr.com>
- * @author Adrian Lang <lang@cosmocode.de>
+ * @return string
  */
 function subscription_addresslist(&$data){
     global $conf;
+    /** @var auth_basic $auth */
     global $auth;
 
     $id = $data['id'];
@@ -277,8 +292,8 @@ function subscription_addresslist(&$data){
     }
     $pres = array('style' => 'every', 'escaped' => true);
     if (!$self && isset($_SERVER['REMOTE_USER'])) {
-        $pres['user'] = '((?:(?!' . preg_quote_cb($_SERVER['REMOTE_USER']) .
-                        ')\S?)+)';
+        $pres['user'] = '((?!' . preg_quote_cb($_SERVER['REMOTE_USER']) .
+                        '(?: |$))\S+)';
     }
     $subs = subscription_find($id, $pres);
     $emails = array();
@@ -302,11 +317,11 @@ function subscription_addresslist(&$data){
  *
  * Sends a digest mail showing a bunch of changes.
  *
+ * @author Adrian Lang <lang@cosmocode.de>
+ *
  * @param string $subscriber_mail The target mail address
  * @param array  $id              The ID
  * @param int    $lastupdate      Time of the last notification
- *
- * @author Adrian Lang <lang@cosmocode.de>
  */
 function subscription_send_digest($subscriber_mail, $id, $lastupdate) {
     $n = 0;
@@ -338,11 +353,11 @@ function subscription_send_digest($subscriber_mail, $id, $lastupdate) {
  *
  * Sends a list mail showing a list of changed pages.
  *
+ * @author Adrian Lang <lang@cosmocode.de>
+ *
  * @param string $subscriber_mail The target mail address
  * @param array  $ids             Array of ids
  * @param string $ns_id           The id of the namespace
- *
- * @author Adrian Lang <lang@cosmocode.de>
  */
 function subscription_send_list($subscriber_mail, $ids, $ns_id) {
     if (count($ids) === 0) return;
@@ -364,6 +379,8 @@ function subscription_send_list($subscriber_mail, $ids, $ns_id) {
 /**
  * Helper function for sending a mail
  *
+ * @author Adrian Lang <lang@cosmocode.de>
+ *
  * @param string $subscriber_mail The target mail address
  * @param array  $replaces        Predefined parameters used to parse the
  *                                template
@@ -371,23 +388,27 @@ function subscription_send_list($subscriber_mail, $ids, $ns_id) {
  *                                prefix “mail_”)
  * @param string $id              The page or namespace id
  * @param string $template        The name of the mail template
- *
- * @author Adrian Lang <lang@cosmocode.de>
+ * @return bool
  */
 function subscription_send($subscriber_mail, $replaces, $subject, $id, $template) {
+    global $lang;
     global $conf;
 
     $text = rawLocale($template);
-    $replaces = array_merge($replaces, array('TITLE'       => $conf['title'],
-                                             'DOKUWIKIURL' => DOKU_URL,
-                                             'PAGE'        => $id));
+    $trep = array_merge($replaces, array('PAGE' => $id));
+    $hrep = $trep;
+    $hrep['DIFF'] = nl2br(htmlspecialchars($hrep['DIFF']));
 
-    foreach ($replaces as $key => $substitution) {
-        $text = str_replace('@'.strtoupper($key).'@', $substitution, $text);
-    }
-
-    global $lang;
     $subject = $lang['mail_' . $subject] . ' ' . $id;
-    mail_send('', '['.$conf['title'].'] '. $subject, $text,
-              $conf['mailfrom'], '', $subscriber_mail);
+    $mail = new Mailer();
+    $mail->bcc($subscriber_mail);
+    $mail->subject($subject);
+    $mail->setBody($text,$trep,$hrep);
+    $mail->from($conf['mailfromnobody']);
+    $mail->setHeader(
+        'List-Unsubscribe',
+        '<'.wl($id,array('do'=>'subscribe'),true,'&').'>',
+        false
+    );
+    return $mail->send();
 }

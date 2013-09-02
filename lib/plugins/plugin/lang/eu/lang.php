@@ -3,6 +3,7 @@
  * Basque language file
  *
  * @author Inko Illarramendi <inko.i.a@gmail.com>
+ * @author Zigor Astarbe <astarbe@gmail.com>
  */
 $lang['menu']                  = 'Plugin-ak Kudeatu';
 $lang['download']              = 'Plugin berri bat deskargatu eta instalatu';
@@ -48,3 +49,4 @@ $lang['enabled']               = '%s Plugin-a gaitua.';
 $lang['notenabled']            = '%s Plugin-a ezin izan da gaitu, egiaztatu fitxategi baimenak.';
 $lang['disabled']              = '%s Plugin-a ezgaitua.';
 $lang['notdisabled']           = '%s Plugin-a ezin izan da ezgaitu, egiaztatu fitxategi baimenak. ';
+$lang['packageinstalled']      = 'Plugin paketea (%d plugin(s): %s) arrakastaz instalatua izan da.';

@@ -11,6 +11,9 @@
  * @author snarchio@alice.it
  * @author robocap <robocap1@gmail.com>
  * @author Osman Tekin osman.tekin93@hotmail.it
+ * @author Jacopo Corbetta <jacopo.corbetta@gmail.com>
+ * @author Matteo Pasotti <matteo@xquiet.eu>
+ * @author snarchio@gmail.com
  */
 $lang['menu']                  = 'Gestione Utenti';
 $lang['noauth']                = '(autenticazione non disponibile)';
